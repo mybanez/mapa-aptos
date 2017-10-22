@@ -1,20 +1,269 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
-  <head>
-    <meta http-equiv="content-type" content="application/xhtml+xml; charset=UTF-8" />
-    <title>Hello App Engine</title>
-  </head>
+<html>
+<head>
+	<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+	<style type="text/css">
+		html, body { height:100%; margin: 0}
+		#cm_map { height: 100%; }
+	</style>
+</head>
+<body id="cm_body" onload="cm_load()">
+	<div id="cm_map" style="float:left; height: 100%; width: 90%"></div>  
+</body>
+<script src="https://maps.googleapis.com/maps/api/js?libraries=places&key=AIzaSyBsO6JqtApMOrjiuakEB8IHMUpfkWefOGo">
+</script>
+<script>
+//<![CDATA[
+// Change these parameters to customize map
 
-  <body>
-    <h1>Hello App Engine!</h1>
-  
-    <table>
-      <tr>
-        <td colspan="2" style="font-weight:bold;">Available Servlets:</td>        
-      </tr>
-      <tr>
-        <td><a href='/hello'>The servlet</a></td>
-      </tr>
-    </table>
-  </body>
+var param_wsId = "od6";
+var param_ssKey = "1nWBSHveDPDv0JVcYBNyRkAT35XQ-QNiHJU-YgiC156I";
+var param_urlPrefix = "https://www.obayashi.co.jp/chronicle/img/mapfiles/markers/"; 
+var param_useSidebar = true;
+var param_titleColumn = "titulo";
+var param_colorColumn = "cor";
+var param_descriptionColumn = "descrição";
+var param_latColumn = "latitude2";
+var param_lngColumn = "longitude2";
+var param_rankColumn = "sequencial";
+var param_iconOverColor = "red";
+var cm_map;
+var cm_mapMarkers = [];
+
+// Create the base objects for all of our markers that specifies the
+// shadow, icon dimensions, etc.
+var iconSize = new google.maps.Size(20, 34);
+var iconOrigin = new google.maps.Point(0, 0);
+var iconAnchor = new google.maps.Point(9, 34);
+var defaultImages = {};
+defaultImages[param_iconOverColor] = 
+  new google.maps.MarkerImage(
+   param_urlPrefix + param_iconOverColor + "/blank.png",
+   iconSize, iconOrigin, iconAnchor);   
+defaultImages["shadow"] = new google.maps.MarkerImage(
+   "http://www.google.com/mapfiles/shadow50.png",
+   new google.maps.Size(37, 34), iconOrigin, iconAnchor);
+
+/**
+ * Loads map and calls function to load in worksheet data.
+ */
+function cm_load() {  
+    var latlng = new google.maps.LatLng(-3.345,-38.35);
+    var myOptions = {
+      zoom: 8,
+      center: latlng,
+	  disableDefaultUI: false,
+      mapTypeId: google.maps.MapTypeId.ROADMAP
+    };
+    cm_map = new google.maps.Map(document.getElementById("cm_map"),
+        myOptions);
+	cm_getJSON();
+}
+
+/**
+ * Function called when marker on the map is clicked.
+ * Opens an info window (bubble) above the marker.
+ * @param {Number} markerNum Number of marker in global array
+ */
+function cm_markerClicked(markerNum) {
+  google.maps.event.trigger(cm_mapMarkers[markerNum], 'click');  
+}
+
+/**
+ * Function that sorts 2 worksheet rows from JSON feed
+ * based on their rank column. Only called if column is defined.
+ * @param {rowA} Object Represents row in JSON feed
+ * @param {rowB} Object Represents row in JSON feed
+ * @return {Number} Difference between row values
+ */
+function cm_sortRows(rowA, rowB) {
+  var rowAValue = parseFloat(rowA["gsx$" + param_rankColumn].$t);
+  var rowBValue = parseFloat(rowB["gsx$" + param_rankColumn].$t);
+
+  return rowAValue - rowBValue;
+}
+
+/** 
+ * Called when JSON is loaded. Creates sidebar if param_sideBar is true.
+ * Sorts rows if param_rankColumn is valid column. Iterates through worksheet rows, 
+ * creating marker and sidebar entries for each row.
+ * @param {JSON} json Worksheet feed
+ */       
+function cm_loadMapJSON(json) {
+  var usingRank = false;
+
+  if(param_useSidebar == true) {
+    var sidebarDIV = document.createElement("div");
+    sidebarDIV.id = "cm_sidebar";
+    sidebarDIV.style.overflow = "auto";
+    sidebarDIV.style.height = "100%";
+    sidebarDIV.style.width = "9.7%";	
+    sidebarDIV.style.fontSize = "11px";
+    sidebarDIV.style.float = "right";
+    document.getElementById("cm_body").appendChild(sidebarDIV);
+  }
+
+  var bounds = new google.maps.LatLngBounds();	  
+
+  if(json.feed.entry[0]["gsx$" + param_rankColumn]) {
+    usingRank = true;
+    json.feed.entry.sort(cm_sortRows);
+  }
+
+  for (var i = 0; i < json.feed.entry.length; i++) {
+    var entry = json.feed.entry[i];
+    if(entry["gsx$" + param_latColumn]) {
+      var lat = parseFloat(entry["gsx$" + param_latColumn].$t);
+      var lng = parseFloat(entry["gsx$" + param_lngColumn].$t);
+      var point = new google.maps.LatLng(lat,lng);
+	  var color = entry["gsx$"+param_colorColumn].$t;
+      var html = "<div style='font-size:12px'>";
+      html += "<strong>" + entry["gsx$"+param_titleColumn].$t 
+              + "</strong>";
+      var label = entry["gsx$"+param_titleColumn].$t;
+      var rank = 0;
+      if(usingRank && entry["gsx$" + param_rankColumn]) {
+        rank = parseInt(entry["gsx$"+param_rankColumn].$t);
+      }
+      if(entry["gsx$" + param_descriptionColumn]) {
+        html += "<br/>" + entry["gsx$"+param_descriptionColumn].$t;
+      }
+      html += "</div>";
+	  var color = entry["gsx$"+param_colorColumn].$t;
+
+	  if (typeof defaultImages[color] === 'undefined') { 
+		defaultImages[color] = 
+		  new google.maps.MarkerImage(
+			param_urlPrefix + color.toLowerCase() + "/blank.png",
+			iconSize, iconOrigin, iconAnchor);
+	  }	
+	   
+      // create the marker
+      var marker = cm_createMarker(point,color,rank,label,html);
+      cm_mapMarkers.push(marker);
+      bounds.extend(point);
+	  
+      if(param_useSidebar == true) {
+        var markerA = document.createElement("a");
+        markerA.setAttribute("href","javascript:cm_markerClicked('" + i +"')");
+        markerA.style.color = color;
+        var sidebarText= "";
+        if(usingRank) {
+          sidebarText += rank + ") ";
+        } 
+        sidebarText += label;
+        markerA.appendChild(document.createTextNode(sidebarText));
+        sidebarDIV.appendChild(markerA);
+        sidebarDIV.appendChild(document.createElement("br"));
+        sidebarDIV.appendChild(document.createElement("br"));
+		marker.sideBarAnchor = markerA;
+      }
+    }
+  }
+
+  cm_map.fitBounds(bounds);
+  cm_map.setCenter(bounds.getCenter());
+}
+
+/**
+ * Creates marker with ranked Icon or blank icon,
+ * depending if rank is defined. Assigns onclick function.
+ * @param {google.maps.LatLng} point Point to create marker at
+ * @param {String} color Color of marker
+ * @param {Number} rank Number rank of marker, used in creating icon 
+ * @param {String} title Tooltip title to display for marker
+ * @param {String} html HTML to display in InfoWindow
+ * @return {GMarker} Marker created
+ */
+function cm_createMarker(point, color, rank, title, html) {
+  var imageOver, imageOut; 
+  if(rank > 0 && rank < 100) {
+	imageOut = new google.maps.MarkerImage(
+	   param_urlPrefix + color.toLowerCase() + "/marker" + rank + ".png",
+	   iconSize, iconOrigin, iconAnchor);
+	imageOver = new google.maps.MarkerImage(
+	   param_urlPrefix + param_iconOverColor + "/marker" + rank + ".png",
+	   iconSize, iconOrigin, iconAnchor);
+  } else { 
+    imageOut = defaultImages[color];
+    imageOver = defaultImages[param_iconOverColor];
+  }
+
+  var infoWindow = new google.maps.InfoWindow({ content: html, maxWidth: 250 });
+  var marker = 
+    new google.maps.Marker({
+		flat: false,
+		icon: imageOut,
+		map: cm_map, 
+		position: point,
+		shadow: defaultImages["shadow"],
+		title: title
+	});
+  //Customized attributes	
+  marker.imageOut = imageOut;
+  marker.imageOver = imageOver;
+  marker.infoWindow = infoWindow;
+  infoWindow.marker = marker;
+  infoWindow.isVisible = false;
+	
+  google.maps.event.addListener(marker, 'mouseover', function() {
+    marker.setIcon(marker.imageOver);
+  });
+  google.maps.event.addListener(marker, 'mouseout', function() {
+    if (!marker.infoWindow.isVisible) {
+		marker.setIcon(marker.imageOut);
+	}
+  });
+  google.maps.event.addListener(marker, 'click', function() {
+	if (!marker.infoWindow.isVisible) {
+		marker.infoWindow.open(cm_map,marker);
+		marker.infoWindow.isVisible = true;
+		marker.setIcon(marker.imageOver);
+		if (param_useSidebar) {
+			marker.sideBarAnchor.style.fontSize = '13px';
+			marker.sideBarAnchor.style.fontWeight = 'bold';
+			marker.sideBarAnchor.style.color = param_iconOverColor;
+		}	
+	} else {
+	    marker.infoWindow.close();
+		google.maps.event.trigger(marker.infoWindow, 'closeclick');
+	}
+  });
+  google.maps.event.addListener(infoWindow,'closeclick',function(){
+	infoWindow.isVisible = false;
+	infoWindow.marker.setIcon(infoWindow.marker.imageOut);
+	if (param_useSidebar) {
+		infoWindow.marker.sideBarAnchor.style.fontSize = '12px';	
+		infoWindow.marker.sideBarAnchor.style.fontWeight = 'normal';
+		infoWindow.marker.sideBarAnchor.style.color = color;
+	}
+  });
+  return marker;
+}
+
+/**
+ * Creates a script tag in the page that loads in the 
+ * JSON feed for the specified key/ID. 
+ * Once loaded, it calls cm_loadMapJSON.
+ */
+function cm_getJSON() {
+
+  // Retrieve the JSON feed.
+  var script = document.createElement('script');
+
+  script.setAttribute('src', 'https://spreadsheets.google.com/feeds/list'
+                         + '/' + param_ssKey + '/' + param_wsId + '/public/values' +
+                        '?alt=json-in-script&callback=cm_loadMapJSON');
+  script.setAttribute('id', 'jsonScript');
+  script.setAttribute('type', 'text/javascript');
+  document.documentElement.firstChild.appendChild(script);
+}
+
+//]]>
+</script>
+<head>
+	<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+	<meta http-equiv="Pragma" content="no-cache" />
+	<meta http-equiv="Expires" content="0" />
+</head>
 </html>
